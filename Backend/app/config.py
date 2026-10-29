@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 # Load .env file from Backend directory
 BASE_DIR = Path(__file__).resolve().parent.parent
 env_path = BASE_DIR / ".env"
-load_dotenv(dotenv_path=env_path)
+load_dotenv(dotenv_path=env_path, override=True)
 
 
 class Settings:

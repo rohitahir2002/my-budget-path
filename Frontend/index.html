@@ -884,25 +884,92 @@ tr:hover td { background: color-mix(in srgb, var(--ac) 4%, transparent); }
       </div>
     </div>
 
-    <!-- NEW PICTORIAL STATS FOR TRANSACTIONS: Top Categories & Payment Modes -->
-    <div class="two" id="tx-charts-section">
-      <div class="card">
-        <div class="card-header">
-          <h2>Spending by Category</h2>
-          <span class="sm">Transaction Ledger Velocity</span>
+    <!-- ==================== DETAILED MONTHLY TRANSACTION ANALYTICS ==================== -->
+    <div class="card" style="margin-bottom: 20px;">
+      <div class="card-header" style="flex-wrap: wrap; gap: 10px;">
+        <div>
+          <h2>Monthly Transaction Analytics</h2>
+          <span class="sm">Detailed time-series velocity, multi-month comparison, and category allocation</span>
         </div>
-        <div id="tx-category-bars" style="padding: 10px 0;">
-          <p class="sm" style="text-align:center;">Record transactions to see category distribution.</p>
+        <div style="display:flex; align-items:center; gap: 10px;">
+          <label for="monthly-stats-select" style="margin:0; font-size:0.85rem; font-weight:600;">Select Month:</label>
+          <select id="monthly-stats-select" style="width: auto; min-width: 150px; padding: 7px 10px; border-radius: 8px;"></select>
+          <button class="btn btn-secondary btn-sm" id="btn-refresh-monthly" title="Reload monthly statistics">🔄</button>
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-header">
-          <h2>Payment Methods Distribution</h2>
-          <span class="sm">UPI vs Card vs Cash</span>
+      <!-- Monthly Dynamic KPIs -->
+      <div class="kpis" style="margin-bottom: 20px;">
+        <div class="k">
+          <b id="m-kpi-expense" style="color: var(--bad);">₹0</b>
+          <span>Selected Month Spend</span>
         </div>
-        <div id="tx-payment-donut" class="donut-container">
-          <p class="sm" style="text-align:center;">Record transactions to view payment methods.</p>
+        <div class="k">
+          <b id="m-kpi-income" style="color: var(--ok);">₹0</b>
+          <span>Selected Month Income</span>
+        </div>
+        <div class="k">
+          <b id="m-kpi-savings">₹0</b>
+          <span>Monthly Net Savings</span>
+        </div>
+        <div class="k">
+          <b id="m-kpi-rate" style="color: var(--ac);">0%</b>
+          <span>Monthly Savings Rate</span>
+        </div>
+        <div class="k">
+          <b id="m-kpi-daily">₹0</b>
+          <span>Daily Average Spend</span>
+        </div>
+      </div>
+
+      <!-- Detailed Charts Grid 1: Month-over-Month Cashflow & Daily Burn Curve -->
+      <div class="two">
+        <!-- Chart 1: Month-over-Month Cashflow Comparison Chart -->
+        <div class="card" style="margin-bottom: 0; background: var(--bg-card-subtle);">
+          <div class="card-header">
+            <h2>Multi-Month Cashflow Trend</h2>
+            <span class="sm">Income vs Expense vs Savings</span>
+          </div>
+          <div id="tx-monthly-trend-chart"></div>
+          <div class="leg">
+            <span><i style="background:var(--go)"></i>Monthly Income</span>
+            <span><i style="background:var(--bad)"></i>Monthly Expense</span>
+            <span><i style="background:var(--ok)"></i>Net Savings</span>
+          </div>
+        </div>
+
+        <!-- Chart 2: Daily Spend Velocity & Cumulative Burn Curve -->
+        <div class="card" style="margin-bottom: 0; background: var(--bg-card-subtle);">
+          <div class="card-header">
+            <h2>Daily Spend & Cumulative Burn</h2>
+            <span class="sm" id="tx-daily-month-label">Daily Outflow Velocity</span>
+          </div>
+          <div id="tx-daily-burn-chart"></div>
+          <div class="leg">
+            <span><i style="background:var(--ac)"></i>Daily Outflow</span>
+            <span><i style="background:var(--purp)"></i>Cumulative Burn Curve</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detailed Charts Grid 2: Monthly Category Breakdown & Payment Channels -->
+      <div class="two" style="margin-top: 20px;">
+        <!-- Chart 3: Category Outflow in Selected Month -->
+        <div class="card" style="margin-bottom: 0; background: var(--bg-card-subtle);">
+          <div class="card-header">
+            <h2>Month Category Breakdown</h2>
+            <span class="sm">Detailed Categorical Outflow</span>
+          </div>
+          <div id="tx-month-cat-donut" class="donut-container"></div>
+        </div>
+
+        <!-- Chart 4: Payment Methods Distribution in Selected Month -->
+        <div class="card" style="margin-bottom: 0; background: var(--bg-card-subtle);">
+          <div class="card-header">
+            <h2>Payment Method Allocation</h2>
+            <span class="sm">UPI vs Cards vs NetBanking vs Cash</span>
+          </div>
+          <div id="tx-month-pay-donut" class="donut-container"></div>
         </div>
       </div>
     </div>
@@ -1168,7 +1235,17 @@ tr:hover td { background: color-mix(in srgb, var(--ac) 4%, transparent); }
    BUDGETPATH PRO CLIENT ENGINE (FastAPI + MongoDB + ML Regression + RBAC)
    ===================================================================== */
 
-const API_BASE = "http://localhost:8000/api";
+// Dynamic API Base URL resolution:
+// If running locally via static server (VS Code Live Server/file://), points to http://localhost:8000/api
+// When deployed on Vercel or cloud, automatically uses same-origin /api
+const API_BASE = (() => {
+  const custom = localStorage.getItem("bp_custom_api");
+  if (custom) return custom.replace(/\/$/, "");
+  const loc = window.location;
+  const isLocalStatic = loc.protocol === "file:" ||
+    ((loc.hostname === "localhost" || loc.hostname === "127.0.0.1") && loc.port !== "8000" && loc.port !== "3000");
+  return isLocalStatic ? "http://localhost:8000/api" : "/api";
+})();
 const NEEDS_DEF = ["rent","emi","utilities","food","transport","health","insurance","groceries","education","loan"];
 const fmt = n => "₹" + Math.round(n || 0).toLocaleString("en-IN");
 const $ = id => document.getElementById(id);
@@ -2017,33 +2094,245 @@ async function loadTransactions() {
     $("tx-net-balance").style.color = summary.net_balance >= 0 ? "var(--ok)" : "var(--bad)";
     $("tx-count").textContent = summary.income_count + summary.expense_count;
 
-    // Render pictorial charts for transactions
-    renderTransactionPictorials(transactionsList);
+    // Render full monthly transaction analytics & detailed charts
+    await loadMonthlyStats();
   } catch (err) {
     console.error("Failed to load transactions:", err);
   }
 }
 
-function renderTransactionPictorials(items) {
-  const expenseItems = items.filter(t => t.type === "expense");
+/**
+ * Detailed Graph 1: Multi-Month Cashflow Multi-Bar / Trend Chart
+ */
+function renderMonthlyMultiBarChart(el, history) {
+  if (!history || !history.length) {
+    el.innerHTML = `<p class="sm" style="text-align:center; padding:30px;">Record transactions across multiple months to view trend.</p>`;
+    return;
+  }
+  const w = 560, h = 210, padLeft = 45, padBot = 28, padTop = 15, padRight = 15;
+  const maxVal = Math.max(...history.map(h => Math.max(h.income, h.expense))) * 1.15 || 1000;
+  const slotW = (w - padLeft - padRight) / Math.max(1, history.length);
+  const barW = Math.max(6, Math.min(22, slotW * 0.32));
 
-  // 1. Category aggregation
-  const catMap = {};
-  expenseItems.forEach(t => { catMap[t.category] = (catMap[t.category] || 0) + t.amount; });
-  const catArray = Object.keys(catMap).map(k => ({ label: k, value: catMap[k] })).sort((a, b) => b.value - a.value);
-  renderHBarChart($("tx-category-bars"), catArray);
+  const sh = v => Math.abs(v) >= 1e5 ? (v/1e5).toFixed(1) + "L" : Math.abs(v) >= 1e3 ? Math.round(v/1e3) + "k" : Math.round(v);
+  const Y = v => h - padBot - (v / maxVal) * (h - padBot - padTop);
 
-  // 2. Payment Method aggregation (Donut)
-  const payMap = {};
-  items.forEach(t => { payMap[t.payment_method] = (payMap[t.payment_method] || 0) + t.amount; });
-  const payArray = Object.keys(payMap).map(k => ({ label: k, value: payMap[k] })).sort((a, b) => b.value - a.value);
-  const totalPay = payArray.reduce((s, x) => s + x.value, 0);
-  if (payArray.length) {
-    renderDonutChart($("tx-payment-donut"), payArray, fmt(totalPay), "Total Logged");
-  } else {
-    $("tx-payment-donut").innerHTML = `<p class="sm" style="text-align:center; padding:20px;">No transactions logged yet.</p>`;
+  let s = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block;">`;
+  // Grid lines
+  for (let k = 0; k <= 3; k++) {
+    const val = (maxVal * k) / 3;
+    const yPos = Y(val);
+    s += `<line class="grid-l" x1="${padLeft}" x2="${w - padRight}" y1="${yPos}" y2="${yPos}"/>`;
+    s += `<text class="ax" x="${padLeft - 6}" y="${yPos + 4}" text-anchor="end">${sh(val)}</text>`;
+  }
+
+  // Draw bars and savings line
+  const savingsPoints = [];
+  history.forEach((item, i) => {
+    const cx = padLeft + i * slotW + slotW / 2;
+    const xInc = cx - barW - 2;
+    const xExp = cx + 2;
+    const yInc = Y(item.income);
+    const yExp = Y(item.expense);
+    const hInc = h - padBot - yInc;
+    const hExp = h - padBot - yExp;
+
+    // Income bar (Gold)
+    s += `<rect x="${xInc}" y="${yInc}" width="${barW}" height="${Math.max(0, hInc)}" fill="var(--go)" rx="3">
+      <title>Month: ${item.month} | Income: ${fmt(item.income)}</title>
+    </rect>`;
+    // Expense bar (Crimson/Bad)
+    s += `<rect x="${xExp}" y="${yExp}" width="${barW}" height="${Math.max(0, hExp)}" fill="var(--bad)" rx="3">
+      <title>Month: ${item.month} | Expense: ${fmt(item.expense)}</title>
+    </rect>`;
+
+    // Month label
+    const label = item.month.length >= 7 ? item.month.slice(2) : item.month;
+    s += `<text class="ax" x="${cx}" y="${h - 8}" text-anchor="middle">${label}</text>`;
+
+    savingsPoints.push({ x: cx, y: Y(Math.max(0, item.savings)), val: item.savings });
+  });
+
+  // Net Savings line overlay
+  if (savingsPoints.length > 1) {
+    const pathD = savingsPoints.map((pt, i) => (i === 0 ? "M" : "L") + pt.x.toFixed(1) + " " + pt.y.toFixed(1)).join("");
+    s += `<path d="${pathD}" fill="none" stroke="var(--ok)" stroke-width="2.5" stroke-dasharray="4 3"/>`;
+    savingsPoints.forEach(pt => {
+      s += `<circle cx="${pt.x}" cy="${pt.y}" r="4" fill="var(--ok)"><title>Net Savings: ${fmt(pt.val)}</title></circle>`;
+    });
+  }
+
+  s += `</svg>`;
+  el.innerHTML = s;
+}
+
+/**
+ * Detailed Graph 2: Day-by-Day Daily Spend Velocity & Cumulative Burn Rate
+ */
+function renderDailyBurnChart(el, dailyTrends) {
+  if (!dailyTrends || !dailyTrends.length) {
+    el.innerHTML = `<p class="sm" style="text-align:center; padding:30px;">No daily expense records found for this month.</p>`;
+    return;
+  }
+  const w = 560, h = 210, padLeft = 45, padBot = 28, padTop = 15, padRight = 15;
+  const maxCum = Math.max(...dailyTrends.map(d => d.cumulative)) * 1.15 || 1000;
+  const maxDaily = Math.max(...dailyTrends.map(d => d.amount)) || 500;
+  const count = dailyTrends.length;
+  const X = i => padLeft + (i / Math.max(1, count - 1)) * (w - padLeft - padRight);
+  const YCum = v => h - padBot - (v / maxCum) * (h - padBot - padTop);
+  const YBar = v => h - padBot - (v / (maxDaily * 2.2)) * (h - padBot - padTop);
+
+  const sh = v => Math.abs(v) >= 1e5 ? (v/1e5).toFixed(1) + "L" : Math.abs(v) >= 1e3 ? Math.round(v/1e3) + "k" : Math.round(v);
+
+  let s = `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;display:block;">`;
+  // Grid lines
+  for (let k = 0; k <= 3; k++) {
+    const val = (maxCum * k) / 3;
+    const yPos = YCum(val);
+    s += `<line class="grid-l" x1="${padLeft}" x2="${w - padRight}" y1="${yPos}" y2="${yPos}"/>`;
+    s += `<text class="ax" x="${padLeft - 6}" y="${yPos + 4}" text-anchor="end">${sh(val)}</text>`;
+  }
+
+  // Draw daily vertical spike bars (Teal)
+  dailyTrends.forEach((d, i) => {
+    const xPos = X(i);
+    const yTop = YBar(d.amount);
+    const barH = h - padBot - yTop;
+    s += `<rect x="${xPos - 3}" y="${yTop}" width="6" height="${Math.max(0, barH)}" fill="var(--ac)" opacity="0.8" rx="2">
+      <title>Date: ${d.date} | Daily Spend: ${fmt(d.amount)}</title>
+    </rect>`;
+    // Show date tick
+    if (i % Math.max(1, Math.ceil(count / 8)) === 0 || i === count - 1) {
+      s += `<text class="ax" x="${xPos}" y="${h - 8}" text-anchor="middle">${d.day}</text>`;
+    }
+  });
+
+  // Cumulative Burn Area & Line (Purple)
+  const linePoints = dailyTrends.map((d, i) => `${X(i).toFixed(1)},${YCum(d.cumulative).toFixed(1)}`);
+  const areaD = `M ${X(0).toFixed(1)},${h - padBot} ` +
+    dailyTrends.map((d, i) => `L ${X(i).toFixed(1)},${YCum(d.cumulative).toFixed(1)}`).join(" ") +
+    ` L ${X(count - 1).toFixed(1)},${h - padBot} Z`;
+
+  s += `<defs>
+    <linearGradient id="burnGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="var(--purp)" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="var(--purp)" stop-opacity="0.0"/>
+    </linearGradient>
+  </defs>`;
+  s += `<path d="${areaD}" fill="url(#burnGrad)"/>`;
+  s += `<path d="M ${linePoints.join(" L ")}" fill="none" stroke="var(--purp)" stroke-width="2.8" stroke-linecap="round"/>`;
+
+  dailyTrends.forEach((d, i) => {
+    s += `<circle cx="${X(i)}" cy="${YCum(d.cumulative)}" r="3" fill="var(--purp)">
+      <title>Cumulative Outflow: ${fmt(d.cumulative)} on ${d.date}</title>
+    </circle>`;
+  });
+
+  s += `</svg>`;
+  el.innerHTML = s;
+}
+
+/**
+ * Load and render detailed monthly statistics & graphs
+ */
+async function loadMonthlyStats(selectedMonth = null) {
+  try {
+    const query = selectedMonth ? `?month=${encodeURIComponent(selectedMonth)}` : "";
+    let data = null;
+    if (token) {
+      data = await api(`/transactions/monthly-stats${query}`, "GET").catch(() => null);
+    }
+
+    // Fallback client-side aggregation if offline or not logged in
+    if (!data) {
+      const currentMonthStr = new Date().toISOString().slice(0, 7);
+      const allMonths = Array.from(new Set(transactionsList.map(t => (t.date || "").slice(0, 7)).filter(Boolean))).sort().reverse();
+      const chosen = selectedMonth || (allMonths.length ? allMonths[0] : currentMonthStr);
+      const mItems = transactionsList.filter(t => (t.date || "").startsWith(chosen));
+      const inc = mItems.filter(t => t.type === "income").reduce((s, x) => s + x.amount, 0);
+      const exp = mItems.filter(t => t.type === "expense").reduce((s, x) => s + x.amount, 0);
+      
+      const catMap = {};
+      mItems.filter(t => t.type === "expense").forEach(t => { catMap[t.category] = (catMap[t.category] || 0) + t.amount; });
+      const payMap = {};
+      mItems.forEach(t => { payMap[t.payment_method] = (payMap[t.payment_method] || 0) + t.amount; });
+
+      data = {
+        available_months: allMonths.length ? allMonths : [chosen],
+        selected_month: chosen,
+        summary: {
+          total_income: inc,
+          total_expense: exp,
+          net_savings: inc - exp,
+          savings_rate: inc > 0 ? Math.round(((inc - exp) / inc) * 100) : 0,
+          daily_average: Math.round(exp / 30)
+        },
+        daily_trends: [],
+        category_breakdown: Object.keys(catMap).map(k => ({ category: k, amount: catMap[k], percentage: Math.round((catMap[k] / Math.max(1, exp)) * 100) })),
+        payment_methods: Object.keys(payMap).map(k => ({ method: k, amount: payMap[k], percentage: Math.round((payMap[k] / Math.max(1, inc + exp)) * 100) })),
+        monthly_history: [{ month: chosen, income: inc, expense: exp, savings: inc - exp }]
+      };
+    }
+
+    // 1. Populate Month Selector dropdown
+    const select = $("monthly-stats-select");
+    const currentVal = selectedMonth || data.selected_month;
+    select.innerHTML = data.available_months.map(m => `
+      <option value="${m}" ${m === currentVal ? "selected" : ""}>${m}</option>
+    `).join("");
+
+    // 2. Update Monthly KPIs
+    $("m-kpi-expense").textContent = fmt(data.summary.total_expense);
+    $("m-kpi-income").textContent = fmt(data.summary.total_income);
+    $("m-kpi-savings").textContent = fmt(data.summary.net_savings);
+    $("m-kpi-savings").style.color = data.summary.net_savings >= 0 ? "var(--ok)" : "var(--bad)";
+    $("m-kpi-rate").textContent = `${data.summary.savings_rate}%`;
+    $("m-kpi-daily").textContent = fmt(data.summary.daily_average);
+    $("tx-daily-month-label").textContent = `Month: ${data.selected_month} Daily Burn Velocity`;
+
+    // 3. Render Graph 1: Multi-Month Cashflow Multi-Bar / Trend Chart
+    renderMonthlyMultiBarChart($("tx-monthly-trend-chart"), data.monthly_history);
+
+    // 4. Render Graph 2: Day-by-Day Daily Spend Velocity & Cumulative Burn Curve
+    renderDailyBurnChart($("tx-daily-burn-chart"), data.daily_trends);
+
+    // 5. Render Graph 3: Monthly Category Breakdown Donut
+    const catSlices = data.category_breakdown.map((c, i) => ({
+      label: c.category,
+      value: c.amount,
+      color: PALETTE[i % PALETTE.length]
+    }));
+    if (catSlices.length) {
+      renderDonutChart($("tx-month-cat-donut"), catSlices, fmt(data.summary.total_expense), "Monthly Spend");
+    } else {
+      $("tx-month-cat-donut").innerHTML = `<p class="sm" style="text-align:center; padding:30px;">No expense records in ${data.selected_month}.</p>`;
+    }
+
+    // 6. Render Graph 4: Monthly Payment Channels Donut
+    const paySlices = data.payment_methods.map((p, i) => ({
+      label: p.method,
+      value: p.amount,
+      color: PALETTE[(i + 3) % PALETTE.length]
+    }));
+    if (paySlices.length) {
+      const totP = paySlices.reduce((s, x) => s + x.value, 0);
+      renderDonutChart($("tx-month-pay-donut"), paySlices, fmt(totP), "Total Logged");
+    } else {
+      $("tx-month-pay-donut").innerHTML = `<p class="sm" style="text-align:center; padding:30px;">No payments recorded in ${data.selected_month}.</p>`;
+    }
+
+  } catch (err) {
+    console.warn("Could not load monthly stats:", err);
   }
 }
+
+// Hook up month selector change event
+$("monthly-stats-select").onchange = (e) => {
+  loadMonthlyStats(e.target.value);
+};
+$("btn-refresh-monthly").onclick = () => {
+  loadMonthlyStats($("monthly-stats-select").value);
+};
 
 function renderTransactionsTable(items) {
   const tbody = $("transactions-body");

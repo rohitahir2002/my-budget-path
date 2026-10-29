@@ -363,6 +363,7 @@ FastAPI automatically generates interactive Swagger documentation at **`http://l
 | `POST` | `/api/transactions` | Add a new transaction | `{ title, amount, type, category, payment_method, date }` | User Isolated |
 | `DELETE` | `/api/transactions/{id}` | Delete transaction | None | User Isolated |
 | `GET` | `/api/transactions/summary` | Aggregate totals & net balance | None | User Isolated |
+| `GET` | `/api/transactions/monthly-stats` | Monthly stats, multi-month comparison & daily burn curve | Query: `?month=2024-10` | User Isolated |
 
 ### Historical Data & CSV Routes (`/api/history`)
 | Method | Endpoint | Description | Request Body | Access |
@@ -425,7 +426,34 @@ python run.py
 
 ---
 
-## 🎓 10. Viva & Teacher Presentation Q&A (Cheat Sheet)
+## 🌐 10. Deploying on Vercel (Cloud Production)
+
+BudgetPath Pro is pre-configured for one-click deployment on **Vercel** as a full-stack serverless application:
+- **Serverless API**: Handled by `@vercel/python` via [api/index.py](file:///c:/Users/Rohit%20Ahir/OneDrive/Desktop/College%20Project/api/index.py)
+- **Static Frontend**: Served from the global edge CDN via [Frontend/index.html](file:///c:/Users/Rohit%20Ahir/OneDrive/Desktop/College%20Project/Frontend/index.html)
+- **Zero CORS Issues**: Single unified origin (e.g. `https://my-budget-path.vercel.app`)
+
+### Quick 3-Step Deployment:
+1. **Push to GitHub**:
+   ```bash
+   git add .
+   git commit -m "Deploy BudgetPath Pro to Vercel"
+   git push origin development
+   ```
+2. **Import to Vercel**:
+   - Go to [vercel.com](https://vercel.com) ➔ **Add New Project** ➔ Import `rohitahir2002/my-budget-path`.
+   - Set Framework Preset to **Other**, Root Directory to `./`.
+3. **Set Environment Variables in Vercel Dashboard**:
+   - `MONGO_URI`: `mongodb+srv://workrohitahir_db_user:km40XNgjQLujxBe0@cluster0.onhvcjv.mongodb.net`
+   - `DB_NAME`: `budgetpath`
+   - `JWT_SECRET_KEY`: `budgetpath_super_secret_jwt_key_2026_secure_key_change_in_production`
+   - Click **Deploy**!
+
+> 📖 **Full Comprehensive Guide**: Read the dedicated [VERCEL_DEPLOYMENT_GUIDE.md](file:///c:/Users/Rohit%20Ahir/OneDrive/Desktop/College%20Project/VERCEL_DEPLOYMENT_GUIDE.md) for detailed MongoDB Atlas network configuration, verification commands, and troubleshooting.
+
+---
+
+## 🎓 11. Viva & Teacher Presentation Q&A (Cheat Sheet)
 
 Use these concise, technical answers during your project review or teacher questions:
 

@@ -46,6 +46,7 @@ app.include_router(admin_routes.router)
 
 
 @app.get("/api/health", tags=["Health"])
+@app.get("/health", tags=["Health"], include_in_schema=False)
 async def health_check():
     db = get_db()
     db_connected = False
@@ -64,6 +65,7 @@ async def health_check():
 
 
 @app.get("/", tags=["Root"])
+@app.get("/api", tags=["Root"], include_in_schema=False)
 def root():
     return {
         "app": "BudgetPath Pro API",

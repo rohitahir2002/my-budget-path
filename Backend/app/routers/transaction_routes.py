@@ -164,3 +164,124 @@ async def get_transaction_summary(current_user: dict = Depends(get_current_user)
         "income_count": totals["income_count"],
         "expense_count": totals["expense_count"]
     }
+
+
+@router.get("/monthly-stats")
+async def get_monthly_transaction_stats(
+    month: Optional[str] = Query(None, description="Month in YYYY-MM format (e.g., 2024-10)"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Detailed monthly transaction statistics and time-series aggregations
+    for interactive charts and category velocity tracking.
+    """
+    tx_col = get_transactions_collection()
+    if tx_col is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database connection is not available."
+        )
+
+    user_id = current_user["id"]
+    cursor = tx_col.find({"user_id": user_id}).sort("date", 1)
+    all_tx = await cursor.to_list(length=1000)
+
+    # 1. Determine all unique available months (YYYY-MM)
+    all_months = sorted(list(set(t["date"][:7] for t in all_tx if len(t.get("date", "")) >= 7)), reverse=True)
+    current_month_str = datetime.now(timezone.utc).strftime("%Y-%m")
+    if not all_months:
+        all_months = [current_month_str]
+
+    selected_month = month if (month and month in all_months) else all_months[0]
+
+    # 2. Filter for selected month
+    month_tx = [t for t in all_tx if t.get("date", "").startswith(selected_month)]
+
+    total_income = sum(t["amount"] for t in month_tx if t.get("type") == "income")
+    total_expense = sum(t["amount"] for t in month_tx if t.get("type") == "expense")
+    net_savings = total_income - total_expense
+    savings_rate = round((net_savings / total_income * 100), 1) if total_income > 0 else 0.0
+
+    # 3. Category breakdown for selected month
+    cat_map = {}
+    for t in month_tx:
+        if t.get("type") == "expense":
+            c = t.get("category", "Other")
+            cat_map[c] = cat_map.get(c, 0.0) + t.get("amount", 0.0)
+
+    category_breakdown = [
+        {
+            "category": k,
+            "amount": v,
+            "percentage": round((v / total_expense * 100), 1) if total_expense > 0 else 0.0
+        }
+        for k, v in sorted(cat_map.items(), key=lambda x: x[1], reverse=True)
+    ]
+
+    # 4. Payment method breakdown for selected month
+    pay_map = {}
+    for t in month_tx:
+        p = t.get("payment_method", "Other")
+        pay_map[p] = pay_map.get(p, 0.0) + t.get("amount", 0.0)
+
+    tot_pay = sum(pay_map.values())
+    payment_methods = [
+        {
+            "method": k,
+            "amount": v,
+            "percentage": round((v / tot_pay * 100), 1) if tot_pay > 0 else 0.0
+        }
+        for k, v in sorted(pay_map.items(), key=lambda x: x[1], reverse=True)
+    ]
+
+    # 5. Day-by-Day Spending Velocity & Cumulative Burn
+    # Group expense amounts by exact date
+    daily_map = {}
+    for t in month_tx:
+        if t.get("type") == "expense":
+            d = t.get("date", "")
+            daily_map[d] = daily_map.get(d, 0.0) + t.get("amount", 0.0)
+
+    sorted_days = sorted(daily_map.keys())
+    daily_trends = []
+    running_cum = 0.0
+    for d in sorted_days:
+        amt = daily_map[d]
+        running_cum += amt
+        daily_trends.append({
+            "date": d,
+            "day": d[-2:],
+            "amount": amt,
+            "cumulative": running_cum
+        })
+
+    # 6. Multi-Month Trend History (Comparing all available months)
+    monthly_history = []
+    for m in sorted(all_months):
+        m_items = [t for t in all_tx if t.get("date", "").startswith(m)]
+        inc = sum(t["amount"] for t in m_items if t.get("type") == "income")
+        exp = sum(t["amount"] for t in m_items if t.get("type") == "expense")
+        monthly_history.append({
+            "month": m,
+            "income": inc,
+            "expense": exp,
+            "savings": inc - exp
+        })
+
+    return {
+        "available_months": all_months,
+        "selected_month": selected_month,
+        "summary": {
+            "total_income": total_income,
+            "total_expense": total_expense,
+            "net_savings": net_savings,
+            "savings_rate": savings_rate,
+            "transaction_count": len(month_tx),
+            "daily_average": round(total_expense / max(1, len(sorted_days)), 1)
+        },
+        "daily_trends": daily_trends,
+        "category_breakdown": category_breakdown,
+        "payment_methods": payment_methods,
+        "monthly_history": monthly_history
+    }
+

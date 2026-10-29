@@ -1,4 +1,5 @@
 import logging
+import certifi
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.config import settings
 
@@ -8,15 +9,29 @@ client: AsyncIOMotorClient = None
 db = None
 
 
+def init_db():
+    global client, db
+    if db is None or client is None:
+        client_kwargs = {
+            "serverSelectionTimeoutMS": 5000
+        }
+        # If connecting to MongoDB Atlas (mongodb+srv), supply certifi CA bundle
+        if "mongodb+srv://" in settings.MONGO_URI or "tls=true" in settings.MONGO_URI.lower():
+            client_kwargs["tlsCAFile"] = certifi.where()
+
+        client = AsyncIOMotorClient(
+            settings.MONGO_URI,
+            **client_kwargs
+        )
+        db = client[settings.DB_NAME]
+    return db
+
+
 async def connect_to_mongo():
     global client, db
     try:
         logger.info(f"Connecting to MongoDB at {settings.MONGO_URI}...")
-        client = AsyncIOMotorClient(
-            settings.MONGO_URI,
-            serverSelectionTimeoutMS=5000
-        )
-        db = client[settings.DB_NAME]
+        init_db()
         
         # Test connection ping
         await client.admin.command("ping")
@@ -48,28 +63,35 @@ async def close_mongo_connection():
 
 
 def get_db():
+    global db
+    if db is None:
+        init_db()
     return db
 
 
 def get_users_collection():
-    if db is not None:
-        return db["users"]
+    database = get_db()
+    if database is not None:
+        return database["users"]
     return None
 
 
 def get_budget_collection():
-    if db is not None:
-        return db["budget_plans"]
+    database = get_db()
+    if database is not None:
+        return database["budget_plans"]
     return None
 
 
 def get_transactions_collection():
-    if db is not None:
-        return db["transactions"]
+    database = get_db()
+    if database is not None:
+        return database["transactions"]
     return None
 
 
 def get_history_collection():
-    if db is not None:
-        return db["historical_data"]
+    database = get_db()
+    if database is not None:
+        return database["historical_data"]
     return None

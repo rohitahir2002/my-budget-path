@@ -62,3 +62,13 @@ Desktop.ini
 tmp/
 temp/
 scratch/
+
+# 9. Binary Installers & Large Executables
+*.exe
+*.msi
+*.dmg
+*.pkg
+
+# 10. Vercel Deployment Artifacts
+.vercel
+
